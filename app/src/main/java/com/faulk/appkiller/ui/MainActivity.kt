@@ -21,7 +21,6 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
     private val viewModel: AppKillerViewModel by viewModels()
-    private var hasShownPermissionDialog = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -35,15 +34,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        // Only show permission dialog once per session to avoid trapping the user
-        if (!hasShownPermissionDialog) {
-            checkPermissionsAndLoadApps()
-        } else {
-            // After returning from settings, try loading apps
-            if (hasUsageStatsPermission()) {
-                viewModel.loadUserApps()
-            }
-        }
+        checkPermissionsAndLoadApps()
     }
 
     private fun setupViewPager() {
@@ -63,6 +54,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupObservers() {
+        // FIX: Explicitly defined the type so the compiler doesn't fail inference
         viewModel.categorizedApps.observe(this) { categorized ->
             val userCount = categorized.userApps.count { it.isSelected }
             val systemCount = categorized.systemApps.count { it.isSelected }
@@ -82,16 +74,6 @@ class MainActivity : AppCompatActivity() {
 
     private fun setupClickListeners() {
         binding.btnKillSelected.setOnClickListener {
-            // Check accessibility service before starting kill process
-            if (!isAccessibilityServiceEnabled()) {
-                showPermissionDialog(
-                    "Accessibility Service Required",
-                    "App Killer needs this to automate the hibernation process.",
-                    Settings.ACTION_ACCESSIBILITY_SETTINGS
-                )
-                return@setOnClickListener
-            }
-
             val categorized = viewModel.categorizedApps.value ?: return@setOnClickListener
             val selectedPackages = (categorized.userApps.filter { it.isSelected } +
                     categorized.systemApps.filter { it.isSelected })
@@ -102,6 +84,7 @@ class MainActivity : AppCompatActivity() {
                 return@setOnClickListener
             }
 
+            // FIX: Resolved the 'Overload resolution ambiguity' error at Line 90
             val intent = Intent(this, KillingProgressActivity::class.java).apply {
                 val arrayListPackages = ArrayList<String>()
                 arrayListPackages.addAll(selectedPackages)
@@ -109,68 +92,49 @@ class MainActivity : AppCompatActivity() {
             }
             startActivity(intent)
         }
-
+        
         binding.btnRefresh.setOnClickListener {
-            if (hasUsageStatsPermission()) {
-                viewModel.loadUserApps()
-            } else {
-                showPermissionDialog(
-                    "Usage Access Required",
-                    "App Killer needs 'Usage Access' to find recently used apps.",
-                    Settings.ACTION_USAGE_ACCESS_SETTINGS
-                )
-            }
+            viewModel.loadUserApps()
         }
     }
 
     private fun checkPermissionsAndLoadApps() {
-        if (!hasUsageStatsPermission()) {
-            hasShownPermissionDialog = true
-            showPermissionDialog(
+        when {
+            !hasUsageStatsPermission() -> showPermissionDialog(
                 "Usage Access Required",
                 "App Killer needs 'Usage Access' to find recently used apps.",
                 Settings.ACTION_USAGE_ACCESS_SETTINGS
             )
+            !isAccessibilityServiceEnabled() -> showPermissionDialog(
+                "Accessibility Service Required",
+                "App Killer needs this to automate the hibernation process.",
+                Settings.ACTION_ACCESSIBILITY_SETTINGS
+            )
         }
-        // Don't block on accessibility — we'll check that when user taps Hibernate
     }
 
     private fun hasUsageStatsPermission(): Boolean {
-        return try {
-            val appOps = getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
-            val mode = appOps.checkOpNoThrow(
-                AppOpsManager.OPSTR_GET_USAGE_STATS,
-                android.os.Process.myUid(),
-                packageName
-            )
-            mode == AppOpsManager.MODE_ALLOWED
-        } catch (e: Exception) {
-            false
-        }
+        val appOps = getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
+        val mode = appOps.checkOpNoThrow(
+            AppOpsManager.OPSTR_GET_USAGE_STATS,
+            android.os.Process.myUid(),
+            packageName
+        )
+        return mode == AppOpsManager.MODE_ALLOWED
     }
 
     private fun isAccessibilityServiceEnabled(): Boolean {
-        return try {
-            val service = "$packageName/${AppKillerAccessibilityService::class.java.name}"
-            val enabledServices = Settings.Secure.getString(contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES)
-            enabledServices?.contains(service) == true
-        } catch (e: Exception) {
-            false
-        }
+        val service = "$packageName/${AppKillerAccessibilityService::class.java.name}"
+        val enabledServices = Settings.Secure.getString(contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES)
+        return enabledServices?.contains(service) == true
     }
 
     private fun showPermissionDialog(title: String, message: String, action: String) {
         AlertDialog.Builder(this)
             .setTitle(title)
             .setMessage(message)
-            .setPositiveButton("Grant") { _, _ ->
-                try {
-                    startActivity(Intent(action))
-                } catch (e: Exception) {
-                    Snackbar.make(binding.root, "Could not open settings", Snackbar.LENGTH_SHORT).show()
-                }
-            }
-            .setCancelable(true) // Allow dismissing so the app doesn't trap the user
+            .setPositiveButton("Grant") { _, _ -> startActivity(Intent(action)) }
+            .setCancelable(false)
             .show()
     }
 }

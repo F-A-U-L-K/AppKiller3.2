@@ -4,8 +4,7 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- Power/shutdown icon centered in adaptive icon safe zone -->
     <path
         android:fillColor="#FFFFFF"
-        android:pathData="M54,28v16h-4V28h4zM69.5,37.1l-2.83,2.83C69.36,42.28 71,45.96 71,50c0,9.39 -7.61,17 -17,17s-17,-7.61 -17,-17c0,-4.04 1.64,-7.72 4.33,-10.07L38.5,37.1C35.22,39.96 33,44.22 33,50c0,11.6 9.4,21 21,21s21,-9.4 21,-21c0,-5.78 -2.22,-10.04 -5.5,-12.9z" />
+        android:pathData="M30,30h48v48h-48z" /> 
 </vector>
